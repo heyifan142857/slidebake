@@ -8,10 +8,12 @@ version = "0.1.0"
 description = "Bake slide-deck PDFs into page-by-page Markdown with OCR and optional translation."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-  { name = "slidebake contributors" },
+  { name = "He Yifan", email = "231880175@smail.nju.edu.cn" },
 ]
+keywords = ["slides", "pdf", "ocr", "markdown", "translation"]
 dependencies = [
   "openai>=2.0.0",
   "pillow>=11.0.0",
@@ -30,6 +32,11 @@ dev = [
 [project.scripts]
 slidebake = "slidebake.cli:app"
 
+[project.urls]
+Homepage = "https://github.com/heyifan142857/slidebake"
+Repository = "https://github.com/heyifan142857/slidebake.git"
+Issues = "https://github.com/heyifan142857/slidebake/issues"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/slidebake"]
 
@@ -38,6 +45,7 @@ include = [
   "/src/slidebake",
   "/tests",
   "/README.md",
+  "/LICENSE",
   "/pyproject.toml",
   "/.gitignore",
 ]

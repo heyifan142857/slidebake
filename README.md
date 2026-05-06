@@ -10,13 +10,13 @@ clean OCR noise and translate each page.
 does not currently support newer Python versions.
 
 ```bash
-pipx install "git+https://github.com/<owner>/slidebake.git"
+pipx install slidebake
 ```
 
 For local development:
 
 ```bash
-git clone https://github.com/<owner>/slidebake.git
+git clone https://github.com/heyifan142857/slidebake.git
 cd slidebake
 uv venv --python 3.12
 uv sync
