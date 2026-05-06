@@ -63,7 +63,7 @@ def test_cli_checkkey_alias_reports_missing_key(tmp_path: Path, monkeypatch) -> 
 def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
     pdf = tmp_path / "slides.pdf"
     pdf.write_bytes(b"%PDF")
-    out = tmp_path / "slides.md"
+    out = tmp_path / "slides_zh-CN_bilingual.md"
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(cli, "page_count", lambda _path: 2)
@@ -99,8 +99,6 @@ def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
         app,
         [
             str(pdf),
-            "-o",
-            str(out),
             "--target-lang",
             "zh-CN",
             "--bilingual",
@@ -114,6 +112,27 @@ def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
     assert "## 第 1 页" in content
     assert "translated 2" in content
     assert "`zh-CN` (bilingual)" in content
+
+
+def test_default_output_path_reflects_translation_mode(tmp_path: Path) -> None:
+    pdf = tmp_path / "deck.v1.pdf"
+
+    assert (
+        cli._default_output_path(pdf, target_lang=None, bilingual=False)
+        == tmp_path / "deck.v1.md"
+    )
+    assert (
+        cli._default_output_path(pdf, target_lang="zh-CN", bilingual=False)
+        == tmp_path / "deck.v1_zh-CN_translated.md"
+    )
+    assert (
+        cli._default_output_path(pdf, target_lang="zh-CN", bilingual=True)
+        == tmp_path / "deck.v1_zh-CN_bilingual.md"
+    )
+    assert (
+        cli._default_output_path(pdf, target_lang="Chinese (Simplified)", bilingual=True)
+        == tmp_path / "deck.v1_Chinese-Simplified_bilingual.md"
+    )
 
 
 def test_cli_uses_configured_openai_settings(tmp_path: Path, monkeypatch) -> None:

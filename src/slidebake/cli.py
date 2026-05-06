@@ -52,7 +52,14 @@ def main(
     ] = None,
     output: Annotated[
         Path | None,
-        typer.Option("--output", "-o", help="Markdown output path."),
+        typer.Option(
+            "--output",
+            "-o",
+            help=(
+                "Markdown output path. Defaults to input.md, or "
+                "input_<lang>_<mode>.md for translated output."
+            ),
+        ),
     ] = None,
     target_lang: Annotated[
         str | None,
@@ -146,7 +153,11 @@ def main(
             raise ValueError("Input PDF is required unless --check-key is used.")
 
         input_pdf_path = _resolve_input_pdf(input_pdf)
-        output_path = output or input_pdf_path.with_suffix(".md")
+        output_path = output or _default_output_path(
+            input_pdf_path,
+            target_lang=target_lang,
+            bilingual=bilingual,
+        )
         _validate_paths(input_pdf_path, output_path, overwrite=overwrite)
         require_openai_key_for_translation(target_lang, api_key=openai_settings.api_key)
         total_pages = page_count(input_pdf_path)
@@ -230,6 +241,29 @@ def _resolve_input_pdf(input_pdf: str) -> Path:
     if not os.access(path, os.R_OK):
         raise PermissionError(f"Input PDF is not readable: {path}")
     return path
+
+
+def _default_output_path(input_pdf: Path, *, target_lang: str | None, bilingual: bool) -> Path:
+    if not target_lang:
+        return input_pdf.with_suffix(".md")
+
+    lang = _filename_part(target_lang)
+    mode = "bilingual" if bilingual else "translated"
+    return input_pdf.with_name(f"{input_pdf.stem}_{lang}_{mode}.md")
+
+
+def _filename_part(value: str) -> str:
+    pieces: list[str] = []
+    previous_was_separator = False
+    for char in value.strip():
+        if char.isalnum() or char in "._-":
+            pieces.append(char)
+            previous_was_separator = False
+        elif not previous_was_separator:
+            pieces.append("-")
+            previous_was_separator = True
+
+    return "".join(pieces).strip(".-_") or "target"
 
 
 def _validate_paths(input_pdf: Path, output_path: Path, *, overwrite: bool) -> None:

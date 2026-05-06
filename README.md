@@ -24,10 +24,17 @@ uv run slidebake --help
 ## Usage
 
 ```bash
-slidebake slides.pdf -o slides.md
-slidebake slides.pdf -o slides_zh.md --target-lang zh-CN
-slidebake slides.pdf -o slides_bilingual.md --target-lang zh-CN --bilingual
+slidebake slides.pdf
+# writes slides.md
+
+slidebake slides.pdf --target-lang zh-CN
+# writes slides_zh-CN_translated.md
+
+slidebake slides.pdf --target-lang zh-CN --bilingual
+# writes slides_zh-CN_bilingual.md
 ```
+
+Use `-o/--output` to choose an exact output path instead.
 
 Translation requires:
 
