@@ -25,7 +25,7 @@ from .translate import (
     DEFAULT_MODEL,
     DEFAULT_OPENAI_API,
     OpenAITranslator,
-    require_openai_key_for_translation,
+    require_openai_key_for_processing,
 )
 
 app = typer.Typer(
@@ -159,7 +159,7 @@ def main(
             bilingual=bilingual,
         )
         _validate_paths(input_pdf_path, output_path, overwrite=overwrite)
-        require_openai_key_for_translation(target_lang, api_key=openai_settings.api_key)
+        require_openai_key_for_processing(api_key=openai_settings.api_key)
         total_pages = page_count(input_pdf_path)
         selected_pages = parse_page_range(pages, total_pages)
     except typer.Exit:
@@ -284,17 +284,13 @@ def _process_pages(
     openai_settings: OpenAISettings,
 ) -> list[MarkdownPage]:
     ocr_runner = OcrRunner()
-    translator = (
-        OpenAITranslator(
-            target_lang=target_lang,
-            model=openai_settings.model,
-            api_key=openai_settings.api_key,
-            base_url=openai_settings.base_url,
-            api=openai_settings.api,
-            bilingual=bilingual,
-        )
-        if target_lang
-        else None
+    translator = OpenAITranslator(
+        target_lang=target_lang,
+        model=openai_settings.model,
+        api_key=openai_settings.api_key,
+        base_url=openai_settings.base_url,
+        api=openai_settings.api,
+        bilingual=bilingual,
     )
     markdown_pages: list[MarkdownPage] = []
 
@@ -310,31 +306,50 @@ def _process_pages(
         rendered_pages = render_pages(input_pdf, selected_pages, render_dir, dpi=dpi)
         progress.update(render_task, completed=1)
 
-        page_task = progress.add_task("OCR and Markdown", total=len(rendered_pages))
+        page_task = progress.add_task("OCR, LLM cleanup, and Markdown", total=len(rendered_pages))
         for rendered in rendered_pages:
             ocr_page = ocr_runner.recognize(rendered.image_path, rendered.page_number)
             raw_text = local_clean_ocr_text(ocr_page)
-            if translator:
+            cleaned = translator.clean_page(
+                page_number=rendered.page_number,
+                raw_text=raw_text,
+            )
+            errors = _page_errors(cleanup_error=cleaned.error)
+            if target_lang:
                 translated = translator.translate_page(
                     page_number=rendered.page_number,
-                    raw_text=raw_text,
+                    raw_text=cleaned.body,
+                )
+                errors = _page_errors(
+                    cleanup_error=cleaned.error,
+                    translation_error=translated.error,
                 )
                 markdown_pages.append(
                     MarkdownPage(
                         page_number=rendered.page_number,
                         body=translated.body,
                         raw_text=raw_text,
-                        error=translated.error,
+                        error=errors,
                     )
                 )
             else:
                 markdown_pages.append(
                     MarkdownPage(
                         page_number=rendered.page_number,
-                        body=raw_text,
+                        body=cleaned.body,
                         raw_text=raw_text,
+                        error=errors,
                     )
                 )
             progress.advance(page_task)
 
     return markdown_pages
+
+
+def _page_errors(*, cleanup_error: str | None, translation_error: str | None = None) -> str | None:
+    errors: list[str] = []
+    if cleanup_error:
+        errors.append(f"cleanup: {cleanup_error}")
+    if translation_error:
+        errors.append(f"translation: {translation_error}")
+    return "; ".join(errors) or None

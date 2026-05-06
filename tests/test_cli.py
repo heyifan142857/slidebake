@@ -89,6 +89,9 @@ def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
         def __init__(self, **_kwargs: object) -> None:
             pass
 
+        def clean_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
+            return TranslationResult(f"cleaned {page_number}: {raw_text}")
+
         def translate_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
             return TranslationResult(f"原文\n\n{raw_text}\n\n译文\n\ntranslated {page_number}")
 
@@ -110,8 +113,74 @@ def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     content = out.read_text(encoding="utf-8")
     assert "## 第 1 页" in content
+    assert "cleaned 2: raw 2" in content
     assert "translated 2" in content
     assert "`zh-CN` (bilingual)" in content
+
+
+def test_cli_cleans_markdown_without_translation(tmp_path: Path, monkeypatch) -> None:
+    pdf = tmp_path / "slides.pdf"
+    pdf.write_bytes(b"%PDF")
+    out = tmp_path / "slides.md"
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(cli, "page_count", lambda _path: 1)
+    monkeypatch.setattr(
+        cli,
+        "render_pages",
+        lambda _pdf, pages, output_dir, dpi: [
+            RenderedPage(page, output_dir / f"page-{page}.png", 100, 100)
+            for page in pages
+        ],
+    )
+
+    class FakeOcrRunner:
+        def recognize(self, _image_path: Path, page_number: int) -> OcrPage:
+            return OcrPage(
+                page_number=page_number,
+                width=100,
+                height=100,
+                lines=(OcrLine("Soffware archifecture", 1, 0, 0, 10, 10),),
+            )
+
+    class FakeTranslator:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def clean_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
+            assert raw_text == "Soffware archifecture"
+            return TranslationResult(f"cleaned page {page_number}")
+
+        def translate_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
+            raise AssertionError("translation should not run without --target-lang")
+
+    monkeypatch.setattr(cli, "OcrRunner", FakeOcrRunner)
+    monkeypatch.setattr(cli, "OpenAITranslator", FakeTranslator)
+
+    result = runner.invoke(app, [str(pdf)])
+
+    assert result.exit_code == 0, result.output
+    content = out.read_text(encoding="utf-8")
+    assert "cleaned page 1" in content
+    assert "Target language" not in content
+
+
+def test_cli_requires_openai_key_for_cleanup_without_translation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pdf = tmp_path / "slides.pdf"
+    pdf.write_bytes(b"%PDF")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SLIDEBAKE_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SLIDEBAKE_CONFIG", raising=False)
+
+    result = runner.invoke(app, [str(pdf)])
+
+    assert result.exit_code == 1
+    assert "LLM cleanup" in result.output
+    assert "every run" in result.output
 
 
 def test_default_output_path_reflects_translation_mode(tmp_path: Path) -> None:
@@ -185,6 +254,9 @@ def test_cli_uses_configured_openai_settings(tmp_path: Path, monkeypatch) -> Non
                     api=kwargs.get("api"),
                 )
             )
+
+        def clean_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
+            return TranslationResult(f"cleaned {page_number}: {raw_text}")
 
         def translate_page(self, *, page_number: int, raw_text: str) -> TranslationResult:
             return TranslationResult(f"translated {page_number}: {raw_text}")

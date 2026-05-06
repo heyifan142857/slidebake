@@ -28,7 +28,7 @@ def test_compose_markdown_bilingual_and_error() -> None:
 
     assert "`Chinese` (bilingual)" in content
     assert "## 第 2 页" in content
-    assert "> 翻译失败：timeout" in content
+    assert "> LLM 处理失败：timeout" in content
 
 
 def test_local_clean_ocr_text_handles_empty_pages() -> None:

@@ -45,7 +45,7 @@ def compose_markdown(
         body = page.body.strip() or EMPTY_PAGE_TEXT
         lines.append(body)
         if page.error:
-            lines.extend(["", f"> 翻译失败：{page.error}"])
+            lines.extend(["", f"> LLM 处理失败：{page.error}"])
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

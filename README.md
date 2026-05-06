@@ -1,8 +1,8 @@
 # slidebake
 
 `slidebake` turns slide-deck PDFs, including image-only PDFs exported from PowerPoint,
-into page-by-page Markdown. It uses local OCR first, then can ask the OpenAI API to
-clean OCR noise and translate each page.
+into page-by-page Markdown. It uses local OCR first, then asks the OpenAI API to
+clean OCR noise into polished Markdown, with optional translation for each page.
 
 ## Install
 
@@ -25,18 +25,18 @@ uv run slidebake --help
 
 ```bash
 slidebake slides.pdf
-# writes slides.md
+# cleans OCR into slides.md
 
 slidebake slides.pdf --target-lang zh-CN
-# writes slides_zh-CN_translated.md
+# cleans OCR, translates it, and writes slides_zh-CN_translated.md
 
 slidebake slides.pdf --target-lang zh-CN --bilingual
-# writes slides_zh-CN_bilingual.md
+# cleans OCR, then writes source text plus zh-CN in slides_zh-CN_bilingual.md
 ```
 
 Use `-o/--output` to choose an exact output path instead.
 
-Translation requires:
+LLM cleanup and translation require:
 
 ```bash
 export OPENAI_API_KEY="your_api_key_here"

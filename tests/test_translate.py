@@ -80,6 +80,27 @@ def test_translator_calls_responses_api_with_prompt() -> None:
     assert "Functional requirements" in messages[1]["content"]
 
 
+def test_cleaner_calls_responses_api_with_cleanup_prompt() -> None:
+    client = FakeClient()
+    translator = OpenAITranslator(
+        model="gpt-test",
+        client=client,
+        retry_base_seconds=0,
+    )
+
+    result = translator.clean_page(page_number=4, raw_text="Soffware architecfure")
+
+    assert result.body == "翻译结果"
+    call = client.responses.calls[0]
+    assert call["model"] == "gpt-test"
+    messages = call["input"]
+    assert isinstance(messages, list)
+    assert messages[0]["role"] == "developer"
+    assert "noisy OCR output" in messages[0]["content"]
+    assert "Do not translate" in messages[0]["content"]
+    assert "Soffware architecfure" in messages[1]["content"]
+
+
 def test_translator_calls_chat_completions_for_compatible_api() -> None:
     client = FakeClient()
     translator = OpenAITranslator(
