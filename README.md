@@ -10,7 +10,7 @@ clean OCR noise and translate each page.
 does not currently support newer Python versions.
 
 ```bash
-pipx install slidebake
+pip install slidebake
 ```
 
 For local development:
