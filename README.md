@@ -16,8 +16,6 @@ pipx install slidebake
 For local development:
 
 ```bash
-git clone https://github.com/heyifan142857/slidebake.git
-cd slidebake
 uv venv --python 3.12
 uv sync
 uv run slidebake --help
