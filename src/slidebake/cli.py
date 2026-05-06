@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -20,7 +21,12 @@ from .markdown import (
 )
 from .ocr import OcrRunner
 from .pdf import page_count, parse_page_range, render_pages
-from .translate import OpenAITranslator, require_openai_key_for_translation
+from .translate import (
+    DEFAULT_MODEL,
+    DEFAULT_OPENAI_API,
+    OpenAITranslator,
+    require_openai_key_for_translation,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -39,15 +45,11 @@ def version_callback(value: bool) -> None:
 @app.command(help="Bake slide-deck PDFs into page-by-page Markdown.")
 def main(
     input_pdf: Annotated[
-        Path,
+        str | None,
         typer.Argument(
-            exists=True,
-            file_okay=True,
-            dir_okay=False,
-            readable=True,
             help="PDF exported from a slide deck.",
         ),
-    ],
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option("--output", "-o", help="Markdown output path."),
@@ -92,6 +94,14 @@ def main(
             help=f"Config file path. Defaults to {default_config_path()}.",
         ),
     ] = None,
+    check_key: Annotated[
+        bool,
+        typer.Option(
+            "--check-key",
+            "--checkkey",
+            help="Check resolved OpenAI-compatible API settings and exit.",
+        ),
+    ] = False,
     dpi: Annotated[
         int,
         typer.Option("--dpi", min=72, max=600, help="Render DPI used before OCR."),
@@ -118,10 +128,8 @@ def main(
     ] = None,
 ) -> None:
     del version
-    output_path = output or input_pdf.with_suffix(".md")
 
     try:
-        _validate_paths(input_pdf, output_path, overwrite=overwrite)
         app_config = load_config(config)
         openai_settings = resolve_openai_settings(
             config=app_config,
@@ -130,9 +138,21 @@ def main(
             model=model,
             api=openai_api,
         )
+        if check_key:
+            _print_openai_settings(openai_settings)
+            raise typer.Exit(0 if openai_settings.api_key else 1)
+
+        if input_pdf is None:
+            raise ValueError("Input PDF is required unless --check-key is used.")
+
+        input_pdf_path = _resolve_input_pdf(input_pdf)
+        output_path = output or input_pdf_path.with_suffix(".md")
+        _validate_paths(input_pdf_path, output_path, overwrite=overwrite)
         require_openai_key_for_translation(target_lang, api_key=openai_settings.api_key)
-        total_pages = page_count(input_pdf)
+        total_pages = page_count(input_pdf_path)
         selected_pages = parse_page_range(pages, total_pages)
+    except typer.Exit:
+        raise
     except Exception as exc:  # noqa: BLE001 - convert startup failures into CLI messages
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -146,7 +166,7 @@ def main(
 
     try:
         markdown_pages = _process_pages(
-            input_pdf=input_pdf,
+            input_pdf=input_pdf_path,
             selected_pages=selected_pages,
             render_dir=render_dir,
             dpi=dpi,
@@ -155,9 +175,9 @@ def main(
             openai_settings=openai_settings,
         )
         content = compose_markdown(
-            title=title_from_pdf(input_pdf),
+            title=title_from_pdf(input_pdf_path),
             pages=markdown_pages,
-            source_pdf=input_pdf,
+            source_pdf=input_pdf_path,
             target_lang=target_lang,
             bilingual=bilingual,
         )
@@ -175,6 +195,41 @@ def main(
         f"[green]Wrote[/green] {output_path} "
         f"({len(markdown_pages)} page{'s' if len(markdown_pages) != 1 else ''})"
     )
+
+
+def _print_openai_settings(settings: OpenAISettings) -> None:
+    if settings.api_key:
+        console.print("[green]OpenAI-compatible API key found.[/green]")
+    else:
+        console.print("[red]OpenAI-compatible API key missing.[/red]")
+        console.print(
+            f"Expected [openai].api_key in {default_config_path()}, or an env/CLI key.",
+            markup=False,
+        )
+
+    console.print(f"API key: {_mask_secret(settings.api_key)}")
+    console.print(f"Base URL: {settings.base_url or '(OpenAI default)'}")
+    console.print(f"Model: {settings.model or DEFAULT_MODEL}")
+    console.print(f"API mode: {settings.api or DEFAULT_OPENAI_API}")
+
+
+def _mask_secret(value: str | None) -> str:
+    if not value:
+        return "(missing)"
+    if len(value) <= 8:
+        return f"{value[:1]}...{value[-1:]}"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _resolve_input_pdf(input_pdf: str) -> Path:
+    path = Path(input_pdf)
+    if not path.exists():
+        raise FileNotFoundError(f"Input PDF not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Input must be a file: {path}")
+    if not os.access(path, os.R_OK):
+        raise PermissionError(f"Input PDF is not readable: {path}")
+    return path
 
 
 def _validate_paths(input_pdf: Path, output_path: Path, *, overwrite: bool) -> None:

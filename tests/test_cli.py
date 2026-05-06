@@ -19,6 +19,47 @@ def test_cli_help() -> None:
     assert "slide-deck PDFs" in result.output
 
 
+def test_cli_check_key_uses_config_without_pdf(tmp_path: Path, monkeypatch) -> None:
+    config = tmp_path / "slidebake.toml"
+    config.write_text(
+        "\n".join(
+            [
+                "[openai]",
+                'api_key = "sk-test-123456"',
+                'base_url = "https://api.example.test/v1"',
+                'model = "compatible-model"',
+                'api = "chat_completions"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SLIDEBAKE_OPENAI_API_KEY", raising=False)
+
+    result = runner.invoke(app, ["--check-key", "--config", str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert "API key found" in result.output
+    assert "sk-t...3456" in result.output
+    assert "sk-test-123456" not in result.output
+    assert "https://api.example.test/v1" in result.output
+    assert "compatible-model" in result.output
+    assert "chat_completions" in result.output
+
+
+def test_cli_checkkey_alias_reports_missing_key(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SLIDEBAKE_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SLIDEBAKE_CONFIG", raising=False)
+
+    result = runner.invoke(app, ["--checkkey"])
+
+    assert result.exit_code == 1
+    assert "API key missing" in result.output
+    assert "[openai].api_key" in result.output
+
+
 def test_cli_generates_bilingual_markdown(tmp_path: Path, monkeypatch) -> None:
     pdf = tmp_path / "slides.pdf"
     pdf.write_bytes(b"%PDF")

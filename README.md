@@ -67,5 +67,6 @@ Useful options:
 - `--model gpt-5.4-mini` changes the OpenAI model.
 - `--openai-base-url https://api.example.com/v1` uses an OpenAI-compatible endpoint.
 - `--openai-api chat_completions` uses the Chat Completions compatibility path.
+- `--check-key` checks resolved OpenAI-compatible settings without processing a PDF.
 - `--keep-temp` keeps rendered page images for debugging.
 - `--overwrite` replaces an existing output file.
