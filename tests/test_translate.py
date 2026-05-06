@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from slidebake.config import OPENAI_API_CHAT_COMPLETIONS
 from slidebake.translate import OpenAITranslator
 
 
@@ -22,9 +23,39 @@ class FakeResponses:
         return FakeResponse("翻译结果")
 
 
+@dataclass
+class FakeChatMessage:
+    content: str
+
+
+@dataclass
+class FakeChatChoice:
+    message: FakeChatMessage
+
+
+@dataclass
+class FakeChatResponse:
+    choices: list[FakeChatChoice]
+
+
+class FakeChatCompletions:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> FakeChatResponse:
+        self.calls.append(kwargs)
+        return FakeChatResponse([FakeChatChoice(FakeChatMessage("chat 翻译结果"))])
+
+
+class FakeChat:
+    def __init__(self) -> None:
+        self.completions = FakeChatCompletions()
+
+
 class FakeClient:
     def __init__(self) -> None:
         self.responses = FakeResponses()
+        self.chat = FakeChat()
 
 
 def test_translator_calls_responses_api_with_prompt() -> None:
@@ -47,6 +78,27 @@ def test_translator_calls_responses_api_with_prompt() -> None:
     assert messages[0]["role"] == "developer"
     assert "zh-CN" in messages[1]["content"]
     assert "Functional requirements" in messages[1]["content"]
+
+
+def test_translator_calls_chat_completions_for_compatible_api() -> None:
+    client = FakeClient()
+    translator = OpenAITranslator(
+        target_lang="zh-CN",
+        model="compatible-model",
+        api=OPENAI_API_CHAT_COMPLETIONS,
+        client=client,
+        retry_base_seconds=0,
+    )
+
+    result = translator.translate_page(page_number=2, raw_text="Architecture overview")
+
+    assert result.body == "chat 翻译结果"
+    call = client.chat.completions.calls[0]
+    assert call["model"] == "compatible-model"
+    messages = call["messages"]
+    assert isinstance(messages, list)
+    assert messages[0]["role"] == "system"
+    assert "Architecture overview" in messages[1]["content"]
 
 
 def test_translator_uses_env_model_when_model_not_explicit(monkeypatch) -> None:

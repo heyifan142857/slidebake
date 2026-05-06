@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from . import __version__
+from .config import OpenAISettings, default_config_path, load_config, resolve_openai_settings
 from .markdown import (
     MarkdownPage,
     compose_markdown,
@@ -65,8 +66,30 @@ def main(
             "--model",
             help=(
                 "OpenAI model for translation/cleanup. Defaults to "
-                "SLIDEBAKE_OPENAI_MODEL or gpt-5.4-mini."
+                "SLIDEBAKE_OPENAI_MODEL, config, or gpt-5.4-mini."
             ),
+        ),
+    ] = None,
+    openai_api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--openai-api-key",
+            help="OpenAI-compatible API key. Prefer config or environment for daily use.",
+        ),
+    ] = None,
+    openai_base_url: Annotated[
+        str | None,
+        typer.Option("--openai-base-url", help="OpenAI-compatible base URL."),
+    ] = None,
+    openai_api: Annotated[
+        str | None,
+        typer.Option("--openai-api", help="API mode: responses or chat_completions."),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            help=f"Config file path. Defaults to {default_config_path()}.",
         ),
     ] = None,
     dpi: Annotated[
@@ -99,7 +122,15 @@ def main(
 
     try:
         _validate_paths(input_pdf, output_path, overwrite=overwrite)
-        require_openai_key_for_translation(target_lang)
+        app_config = load_config(config)
+        openai_settings = resolve_openai_settings(
+            config=app_config,
+            api_key=openai_api_key,
+            base_url=openai_base_url,
+            model=model,
+            api=openai_api,
+        )
+        require_openai_key_for_translation(target_lang, api_key=openai_settings.api_key)
         total_pages = page_count(input_pdf)
         selected_pages = parse_page_range(pages, total_pages)
     except Exception as exc:  # noqa: BLE001 - convert startup failures into CLI messages
@@ -121,7 +152,7 @@ def main(
             dpi=dpi,
             target_lang=target_lang,
             bilingual=bilingual,
-            model=model,
+            openai_settings=openai_settings,
         )
         content = compose_markdown(
             title=title_from_pdf(input_pdf),
@@ -161,11 +192,18 @@ def _process_pages(
     dpi: int,
     target_lang: str | None,
     bilingual: bool,
-    model: str | None,
+    openai_settings: OpenAISettings,
 ) -> list[MarkdownPage]:
     ocr_runner = OcrRunner()
     translator = (
-        OpenAITranslator(target_lang=target_lang, model=model, bilingual=bilingual)
+        OpenAITranslator(
+            target_lang=target_lang,
+            model=openai_settings.model,
+            api_key=openai_settings.api_key,
+            base_url=openai_settings.base_url,
+            api=openai_settings.api,
+            bilingual=bilingual,
+        )
         if target_lang
         else None
     )
